@@ -1,0 +1,681 @@
+<!DOCTYPE html> 
+<html lang="en"> 
+    <head> 
+        <meta charset="UTF-8"> 
+        <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+        <title>HapEase Expandable UI</title>         
+        <script src="https://cdn.tailwindcss.com"></script>         
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>         
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'); 
+            body { font-family: 'Inter', sans-serif; } 
+            
+            #top_sheet { height: 40vh; transition: height 0.5s cubic-bezier(0.32, 0.72, 0, 1); } 
+            #drag_handle { touch-action: none; }
+            #top_sheet.expanded_sheet { height: 85vh; } 
+            
+            .view_content { transition: opacity 0.4s ease; width: 100%; } 
+            #collapsed_view { opacity: 1; pointer-events: auto; } 
+            #top_sheet.expanded_sheet #collapsed_view { opacity: 0; pointer-events: none; } 
+            
+            #expanded_view { opacity: 0; pointer-events: none; position: absolute; top: 0; left: 0; padding-top: 2rem; } 
+            #top_sheet.expanded_sheet #expanded_view { opacity: 1; pointer-events: auto; } 
+
+            .expandable_card { height: 3rem; transition: height 0.4s cubic-bezier(0.32, 0.72, 0, 1); overflow: hidden; } 
+            #top_sheet.expanded_sheet .expandable_card { height: 7rem; } 
+
+            .fade_in_card { opacity: 0; transform: translateY(-10px); transition: opacity 0.4s ease, transform 0.4s ease; } 
+            #top_sheet.expanded_sheet .fade_in_card { opacity: 1; transform: translateY(0); } 
+            
+            #health_summary { transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1); transform: translateY(6vh); } 
+            #top_sheet.expanded_sheet #health_summary { transform: translateY(34vh); } 
+            
+            @media (max-height: 650px) { .hide_on_short {  display: none !important; } } 
+            
+            .no_scrollbar::-webkit-scrollbar { display: none; }
+            .no_scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+            
+            .grab_cursor { cursor: grab; }
+            .grab_cursor:active { cursor: grabbing; }
+            
+            .glass_panel { 
+                background: rgba(28, 28, 30, 0.65); 
+                border: 1px solid rgba(255, 255, 255, 0.08); 
+                backdrop-filter: blur(12px); 
+                -webkit-backdrop-filter: blur(12px); 
+            } 
+        </style>         
+    </head>     
+    <body class="bg-[#0f1115]"> 
+        <div class="w-full h-screen bg-cover bg-center overflow-hidden relative mx-auto max-w-xl flex flex-col" style="background-image: url('https://images.unsplash.com/photo-1637946175559-22c4fe13fc54?crop=entropy&cs=srgb&fm=jpg&ixid=M3w0NTYyMDF8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMGJhY2tncm91bmQlMjBibGFja3xlbnwwfHx8fDE3NzUwNzQ5NzZ8MA&ixlib=rb-4.1.0&q=85');"> 
+            
+            <div id="top_sheet" class="w-auto mx-5 shrink-0 bg-[#d1dae3] rounded-b-3xl z-50 flex flex-col items-center pt-10 pb-4 shadow-2xl relative overflow-hidden"> 
+                <h1 id="sheet_title" class="text-4xl font-bold text-[#2a3a4c] mb-4 tracking-tight z-20 transition-all duration-300">HapEase</h1> 
+                
+                <div class="relative w-full flex-grow"> 
+                    
+                    <div id="collapsed_view" class="flex gap-5 view_content w-full px-6"> 
+                        <div class="bg-[#bac6d3] border border-[#aab7c6] flex flex-1 gap-2 h-12 items-center justify-center rounded-full shadow-sm text-[#1d2635]"> 
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 transform -translate-y-px text-[#279595] fill-current" viewBox="0 -960 960 960">
+                                <path d="M320-80q-17 0-28.5-11.5T280-120v-640q0-17 11.5-28.5T320-800h80v-80h160v80h80q17 0 28.5 11.5T680-760v640q0 17-11.5 28.5T640-80H320Zm40-480h240v-160H360v160Z"/>
+                            </svg>
+                            <div id="ui_battery_pill" class="text-xl font-bold leading-none flex items-center">85%</div>
+                        </div>                         
+                        <div id="ble_pill" class="bg-red-100 border border-red-300 cursor-pointer duration-300 flex flex-1 gap-2 h-12 items-center justify-center rounded-full shadow-sm text-red-700 transition-colors hover:bg-red-200"> 
+                            <svg id="ble_pill_icon" xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-red-600 fill-current" viewBox="0 -960 960 960">
+                                <path d="M792-56 624-224 480-80h-40v-304L256-200l-56-56 196-196L56-792l56-56 736 736-56 56ZM520-234l46-46-46-46v92Zm44-274-56-56 88-88-76-74v174l-80-80v-248h40l228 228-144 144Z"/>
+                            </svg>                             
+                            <div id="ble_pill_text" class="text-xl font-bold leading-none flex items-center">Disconnected</div>                             
+                        </div>                         
+                    </div>                     
+                    
+                    <div id="expanded_view" class="view_content absolute w-full top-0 left-0 flex flex-col h-full opacity-0 pointer-events-none"> 
+                        
+                        <div id="swipe_container" class="flex overflow-x-auto snap-x snap-mandatory w-full no_scrollbar grab_cursor pb-2">
+                            
+                            <div class="w-full shrink-0 snap-center px-6 grid grid-cols-2 gap-x-5 gap-y-4 h-fit pt-1"> 
+                                <div class="bg-[#bac6d3] border border-[#aab7c6] expandable_card flex flex-col justify-center p-6 rounded-2xl shadow-sm"> 
+                                    <p class="font-semibold mb-2 text-[#2a3a4c] text-base">Battery</p> 
+                                    <div class="flex items-center gap-2"> 
+                                        <span class="flex items-center"> 
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-[#279595] fill-current" viewBox="0 -960 960 960"><path d="M320-80q-17 0-28.5-11.5T280-120v-640q0-17 11.5-28.5T320-800h80v-80h160v80h80q17 0 28.5 11.5T680-760v640q0 17-11.5 28.5T640-80H320Zm40-480h240v-160H360v160Z"/></svg> 
+                                        </span> 
+                                        <h2 class="flex font-bold items-baseline leading-none text-2xl text-[#2a3a4c] tracking-tight">
+                                            <span id="ui_battery_card">85</span><span class="ml-1 text-lg text-[#6b7b8f] font-semibold">%</span>
+                                        </h2> 
+                                    </div>                             
+                                </div>                         
+                                <div id="ble_card" class="bg-red-100 border border-red-300 cursor-pointer duration-300 expandable_card flex flex-col justify-center p-6 rounded-2xl shadow-sm transition-colors hover:bg-red-200"> 
+                                    <p id="ble_card_title" class="font-semibold mb-2 text-base text-red-800">Bluetooth</p> 
+                                    <div class="flex items-center gap-2"> 
+                                        <span class="flex items-center"> 
+                                            <svg id="ble_card_icon" xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-red-600 fill-current" viewBox="0 -960 960 960"><path d="M792-56 624-224 480-80h-40v-304L256-200l-56-56 196-196L56-792l56-56 736 736-56 56ZM520-234l46-46-46-46v92Zm44-274-56-56 88-88-76-74v174l-80-80v-248h40l228 228-144 144Z"/></svg> 
+                                        </span> 
+                                        <h2 id="ble_card_text" class="flex font-bold items-baseline leading-none text-2xl text-red-700 tracking-tight">Disconnected</h2> 
+                                    </div>                             
+                                </div>                         
+                                <div class="bg-[#bac6d3] border border-[#aab7c6] fade_in_card flex flex-col h-28 justify-center p-6 rounded-2xl shadow-sm col-span-2"> 
+                                    <p class="font-semibold mb-2 text-[#2a3a4c] text-base">Extra</p> 
+                                    <div class="flex items-center gap-2"> 
+                                        <span class="flex items-center"> 
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-[#279595] fill-current" viewBox="0 -960 960 960">
+                                                <path d="M424-320q0-81 14.5-116.5T500-514q41-36 62.5-62.5T584-637q0-41-27.5-68T480-732q-51 0-77.5 31T365-638l-103-44q21-64 77-111t141-47q105 0 161.5 58.5T698-641q0 50-21.5 85.5T609-475q-49 47-59.5 71.5T539-320H424Zm56 240q-33 0-56.5-23.5T400-160q0-33 23.5-56.5T480-240q33 0 56.5 23.5T560-160q0 33-23.5 56.5T480-80Z"/>
+                                            </svg> 
+                                        </span> 
+                                        <h2 class="flex font-bold items-baseline leading-none text-2xl text-[#2a3a4c] tracking-tight">0</h2> 
+                                    </div>                             
+                                </div>                         
+                            </div>
+
+                            <div class="w-full shrink-0 snap-center px-6 flex flex-col gap-4 h-fit pt-1">
+                                <div class="bg-[#bac6d3] border border-[#aab7c6] fade_in_card rounded-2xl p-5 shadow-sm">
+                                    <p class="text-[#2a3a4c] font-bold text-lg mb-4">Reset Metrics</p>
+                                    <p class="text-xs text-[#6b7b8f] font-medium mb-5">Reset your sleep metrics and start tracking a fresh night.</p>
+                                    <button id="btn_reset_session" class="w-full bg-[#279595] hover:bg-[#1f7a7a] text-white font-bold py-3 rounded-xl shadow-sm transition-colors active:scale-95 flex items-center justify-center gap-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 fill-current" viewBox="0 -960 960 960">
+                                            <path d="M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 132 28.5T720-690v-110h80v280H520v-80h168q-32-56-87.5-88T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h84q-28 106-114 173t-186 67Z"/>
+                                        </svg>
+                                        Start New Night
+                                    </button>
+                                </div>
+                            </div>
+                            
+                        </div>
+                        
+                        <div class="flex justify-center gap-2 mt-4 pointer-events-none fade_in_card">
+                            <div id="dot_1" class="w-2 h-2 rounded-full bg-[#279595] transition-colors duration-300"></div>
+                            <div id="dot_2" class="w-2 h-2 rounded-full bg-[#8b9ba8] transition-colors duration-300"></div>
+                        </div>
+
+                    </div>                     
+                    
+                    <div id="health_summary" class="absolute w-full flex justify-center items-center gap-6 left-0 top-[4vh] pointer-events-none hide_on_short z-30">
+                        <div class="flex flex-col items-center w-16">
+                            <span id="ui_apnea_events" class="text-[#2a3a4c] font-bold text-2xl leading-none">2</span>
+                            <span class="text-[9px] text-[#6b7b8f] font-bold uppercase tracking-widest mt-1 text-center">Apnea<br>Events</span>
+                        </div>
+                        
+                        <div class="relative w-32 h-32 flex items-center justify-center shrink-0">
+                            <svg class="w-full h-full transform -rotate-90 absolute" viewBox="0 0 100 100">
+                                <circle cx="50" cy="50" r="40" fill="transparent" stroke="#aab7c6" stroke-width="8" stroke-dasharray="251.2" stroke-dashoffset="0" class="opacity-30"></circle>
+                                <circle id="ui_score_ring" cx="50" cy="50" r="40" fill="transparent" stroke="#279595" stroke-width="8" stroke-dasharray="251.2" stroke-dashoffset="20.096" stroke-linecap="round" class="transition-all duration-500"></circle>
+                            </svg>
+                            <div class="flex flex-col items-center justify-center mt-1">
+                                <span id="ui_sleep_score" class="text-4xl font-bold text-[#2a3a4c] tracking-tighter leading-none">92</span>
+                                <span class="text-[9px] font-semibold text-[#6b7b8f] uppercase tracking-widest mt-1 text-center">Sleep<br>Score</span>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col items-center w-16">
+                            <span id="ui_position_changes" class="text-[#2a3a4c] font-bold text-2xl leading-none flex items-baseline">0</span>
+                            <span class="text-[9px] text-[#6b7b8f] font-bold uppercase tracking-widest mt-1 text-center">Position<br>Changes</span>
+                        </div>
+                    </div>
+                    
+                </div>                 
+                <div id="drag_handle" class="w-64 py-4 flex items-center justify-center cursor-pointer mt-auto z-30 group">
+                    <div class="w-12 h-1 bg-[#8b9ba8] rounded-full transition group-hover:bg-[#6b7b88]"></div>
+                </div>
+            </div>             
+            
+            <div class="w-full flex-grow flex flex-col overflow-y-auto px-5 pt-6 gap-6 relative z-10 no_scrollbar pb-8"> 
+                <div class="flex gap-3 shrink-0"> 
+                    <div class="glass_panel flex-1 rounded-2xl p-3 shadow-lg flex flex-col justify-center"> 
+                        <p class="text-gray-300 text-[11px] uppercase tracking-wider font-semibold mb-1.5 whitespace-nowrap">Blood Oxygen</p> 
+                        <div class="flex items-center gap-1.5"> 
+                            <span class="font-bold leading-none flex items-center"> 
+                                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-[#39d2c0] fill-current" viewBox="0 -960 960 960">
+                                    <path d="M484-164q-15 0-25.5-10.5T448-200v-160q0-15 10.5-25.5T484-396h100q15 0 25.5 10.5T620-360v160q0 15-10.5 25.5T584-164H484Zm16-52h68v-128h-68v128ZM680-80v-110q0-15.67 10.17-25.83Q700.33-226 716-226h92v-42H680v-52h144q15.67 0 25.83 10.17Q860-299.67 860-284v74q0 15.67-10.17 25.83Q839.67-174 824-174h-92v42h128v52H680Zm-306.67-1.33Q245-91.33 162.5-183.5T80-408q0-100 79.5-217.5T400-880q133.33 113.33 212.83 217.33 79.5 104 99.84 192h-69q-20-68.33-82.34-150.66Q499-703.67 400-791.33q-124.33 111-188.83 208.66Q146.67-485 146.67-408q0 104.67 63.5 177.17 63.5 72.5 163.16 82.5v67Zm22-326.67Z"/>
+                                </svg> 
+                            </span> 
+                            <h2 class="text-white text-2xl font-bold leading-none tracking-tight flex items-baseline"><span id="ui_bloodoxygen">98</span><span class="ml-0.5 text-sm text-gray-400 font-semibold">%</span></h2> 
+                        </div>                         
+                    </div>                     
+                    <div class="glass_panel flex-1 rounded-2xl p-3 shadow-lg flex flex-col justify-center"> 
+                        <p class="text-gray-300 text-[11px] uppercase tracking-wider font-semibold mb-1.5 whitespace-nowrap">Heartbeat</p> 
+                        <div class="flex gap-1.5 items-center"> 
+                            <span class="flex items-center"> 
+                                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-[#39d2c0] fill-current" viewBox="0 -960 960 960">
+                                    <path d="M480-480Zm0 360q-18 0-34.5-6.5T416-146L148-415q-35-35-51.5-80T80-589q0-103 67-177t167-74q48 0 90.5 19t75.5 53q32-34 74.5-53t90.5-19q100 0 167.5 74T880-590q0 49-17 94t-51 80L543-146q-13 13-29 19.5t-34 6.5Zm40-513.33q8.67 0 15.67 4.33t12 11l70 104.67h180.66q7.67-18.34 11.5-37.5 3.84-19.17 3.84-39.17Q813-664.33 765-718.5t-120-54.17q-33.67 0-64.83 13.67Q549-745.33 526-720.33l-27 29q-3.67 4-8.33 6.5-4.67 2.5-10.67 2.5t-11-2.5q-5-2.5-9-6.5l-27-29q-23-25-54-39t-65-14q-72 0-119.67 54.5-47.66 54.5-47.66 128.83 0 20 3.66 39.17 3.67 19.16 11.34 37.5H360q8.67 0 16 4t11.67 10.66l42.33 64L488-610q3.33-10 12.17-16.67 8.83-6.66 19.83-6.66Zm10 108L471.33-350Q468-340 459-333.33q-9 6.66-20 6.66-8.67 0-15.67-4.33T412-342l-70-104.67H210.67l253 253q4 4 7.83 5.5t8.5 1.5q4.67 0 8.5-1.5t7.83-5.5l252-253H600q-8.67 0-15.67-4.33T572-462l-42-63.33Z"/>
+                                </svg> 
+                            </span>
+                            <h2 class="text-white text-2xl font-bold leading-none tracking-tight flex items-baseline"><span id="ui_heartbeat">72</span><span class="font-semibold ml-0.5 text-sm text-gray-400">bpm</span></h2> 
+                        </div>                         
+                    </div>                     
+                    <div class="glass_panel flex-1 rounded-2xl p-3 shadow-lg flex flex-col justify-center"> 
+                        <p class="text-gray-300 text-[11px] uppercase tracking-wider font-semibold mb-1.5 whitespace-nowrap">Position</p> 
+                        <div class="flex gap-1.5 items-center"> 
+                            <span class="flex items-center"> 
+                                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-[#39d2c0] fill-current" viewBox="0 -960 960 960">
+                                    <path d="M360-80v-529q-91-24-145.5-100.5T160-880h80q0 83 53.5 141.5T430-680h100q30 0 56 11t47 32l181 181-56 56-158-158v478h-80v-240h-80v240h-80Zm63.5-663.5Q400-767 400-800t23.5-56.5Q447-880 480-880t56.5 23.5Q560-833 560-800t-23.5 56.5Q513-720 480-720t-56.5-23.5Z"/>
+                                </svg> 
+                            </span>
+                            <h2 class="text-white text-xl font-bold leading-none tracking-tight flex items-baseline truncate" id="ui_position_main">Back</h2> 
+                        </div>                         
+                    </div> 
+                </div>                 
+                <div class="bg-[#1c1c1e]/60 backdrop-blur-md rounded-t-3xl rounded-b-none p-5 pt-6 shadow-xl border border-white/10 border-b-0 flex-grow flex flex-col min-h-0"> 
+                    <div class="w-12 h-1 bg-[#3a3a3c] rounded-full mx-auto mb-4 shrink-0"></div>                     
+                    <h3 class="text-white text-center text-xl font-bold mb-5 tracking-wide shrink-0">Activity</h3> 
+                    
+                    <div class="flex justify-center gap-2 mb-6 shrink-0 flex-wrap"> 
+                        <button id="btn_spo2" class="bg-[#2c2c2e] text-gray-200 border border-[#3a3a3c] px-5 py-2 rounded-full text-sm font-medium shadow-sm">Blood Oxygen</button>                         
+                        <button id="btn_bpm" class="bg-transparent border border-[#3a3a3c] text-gray-400 px-5 py-2 rounded-full text-sm font-medium hover:bg-[#2c2c2e] transition">Heartbeat</button>                         
+                        <button id="btn_position" class="bg-transparent border border-[#3a3a3c] text-gray-400 px-5 py-2 rounded-full text-sm font-medium hover:bg-[#2c2c2e] transition">Position</button>
+                    </div>                     
+                    <div class="relative w-full border-b border-l border-white/10 flex-grow min-h-0 hide_on_short"> 
+                        <canvas id="activity_chart"></canvas>                         
+                    </div>                     
+                </div>                 
+            </div>             
+        </div>         
+
+        <script>
+        const psoc_service_uuid = 'd8269034-c375-4459-acc0-a2f374d07c12'; 
+        const spo2_char_uuid = 'f4dfa35b-a94b-4361-8380-f0f38e27ee89'; 
+        const bpm_char_uuid = '16d73635-0663-460e-84f1-71cd57b679fc';
+        const battery_char_uuid = '039dbf9e-ff82-4eda-84e1-ca6da8c4d94d';
+        const position_char_uuid = '17f0ef18-238e-4281-8162-44623ae98abb';
+
+        const graph_update_interval_ms = 1000; 
+
+        const drag_handle = document.getElementById('drag_handle');
+        const top_sheet = document.getElementById('top_sheet');
+        const sheet_title = document.getElementById('sheet_title');
+        let is_expanded = false;
+        let start_y = 0;
+        let is_ble_paired = false;
+        let ble_device = null;
+        
+        let last_spo2_graph_update = 0;
+        let last_bpm_graph_update = 0;
+        let last_position_graph_update = 0;
+
+        let current_spo2 = 98;
+        let current_bpm = 72;
+        let current_position = 0; 
+        
+        let apnea_events_count = 2; 
+        let is_apnea_active = false; 
+        
+        let position_changes_count = 0;
+        let last_known_position = null;
+
+        function update_sleep_score() {
+            let score = 100 - (apnea_events_count * 8) - (position_changes_count * 2);
+            if (score < 0) score = 0;
+            const score_el = document.getElementById('ui_sleep_score');
+            const ring_el = document.getElementById('ui_score_ring');
+            if (score_el) score_el.innerText = score;
+            if (ring_el) {
+                const offset = 251.2 - (251.2 * (score / 100));
+                ring_el.style.strokeDashoffset = offset;
+            }
+        }
+
+        document.getElementById('btn_reset_session').addEventListener('click', () => {
+            apnea_events_count = 0;
+            position_changes_count = 0;
+            is_apnea_active = false;
+            last_known_position = null;
+            
+            const apnea_el = document.getElementById('ui_apnea_events');
+            if (apnea_el) apnea_el.innerText = apnea_events_count;
+            
+            const changes_el = document.getElementById('ui_position_changes');
+            if (changes_el) changes_el.innerText = position_changes_count;
+            
+            update_sleep_score();
+            
+            swipe_container.scrollTo({ left: 0, behavior: 'smooth' });
+        });
+
+        function evaluate_health() {
+            const dot = document.getElementById('health_dot');
+            const text = document.getElementById('health_text');
+            if (!dot || !text) return;
+            if (current_spo2 > 0 && current_spo2 < 90) {
+                dot.className = "w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse";
+                text.innerText = "Low Blood Oxygen";
+                text.className = "text-red-700 font-bold text-sm";
+            } else if (current_bpm > 100) {
+                dot.className = "w-2.5 h-2.5 rounded-full bg-yellow-500";
+                text.innerText = "Elevated Heart Rate";
+                text.className = "text-yellow-700 font-bold text-sm";
+            } else if (current_bpm > 0 && current_bpm < 50) {
+                dot.className = "w-2.5 h-2.5 rounded-full bg-yellow-500";
+                text.innerText = "Low Heart Rate";
+                text.className = "text-yellow-700 font-bold text-sm";
+            } else {
+                dot.className = "w-2.5 h-2.5 rounded-full bg-[#279595]";
+                text.innerText = "Vitals Normal";
+                text.className = "text-[#2a3a4c] font-semibold text-sm";
+            }
+        }
+
+        function evaluate_apnea_events() {
+            let currently_triggered = (current_spo2 > 0 && current_spo2 < 90) || (current_position === 0);
+            
+            if (currently_triggered && !is_apnea_active) {
+                apnea_events_count++;
+                const apnea_el = document.getElementById('ui_apnea_events');
+                if (apnea_el) apnea_el.innerText = apnea_events_count;
+                is_apnea_active = true;
+                update_sleep_score();
+            } else if (!currently_triggered && is_apnea_active) {
+                is_apnea_active = false;
+            }
+        }
+
+        function toggle_sheet(force_expand = null) {
+            if (force_expand !== null) {
+                is_expanded = force_expand;
+            } else {
+                is_expanded = !is_expanded;
+            }
+            top_sheet.classList.toggle('expanded_sheet', is_expanded);
+        }
+
+        drag_handle.addEventListener('click', () => toggle_sheet());
+        drag_handle.addEventListener('mousedown', (e) => { start_y = e.clientY; e.preventDefault(); });
+        document.addEventListener('mouseup', (e) => {
+            if (start_y === 0) return;
+            let delta_y = e.clientY - start_y;
+            if (!is_expanded && delta_y > 40) toggle_sheet(true);  
+            if (is_expanded && delta_y < -40) toggle_sheet(false); 
+            start_y = 0;
+        });
+
+        drag_handle.addEventListener('touchstart', (e) => { start_y = e.touches[0].clientY; }, {passive: true});
+        document.addEventListener('touchend', (e) => {
+            if (start_y === 0) return;
+            let delta_y = e.changedTouches[0].clientY - start_y;
+            if (!is_expanded && delta_y > 40) toggle_sheet(true);  
+            if (is_expanded && delta_y < -40) toggle_sheet(false); 
+            start_y = 0;
+        });
+
+        const swipe_container = document.getElementById('swipe_container');
+        const dot_1 = document.getElementById('dot_1');
+        const dot_2 = document.getElementById('dot_2');
+
+        swipe_container.addEventListener('scroll', () => {
+            if (swipe_container.scrollLeft > swipe_container.clientWidth / 2) {
+                dot_1.classList.replace('bg-[#279595]', 'bg-[#8b9ba8]');
+                dot_2.classList.replace('bg-[#8b9ba8]', 'bg-[#279595]');
+                sheet_title.innerText = "Settings";
+            } else {
+                dot_1.classList.replace('bg-[#8b9ba8]', 'bg-[#279595]');
+                dot_2.classList.replace('bg-[#279595]', 'bg-[#8b9ba8]');
+                sheet_title.innerText = "HapEase";
+            }
+        });
+
+        let is_down = false;
+        let start_x;
+        let scroll_left;
+
+        swipe_container.addEventListener('mousedown', (e) => {
+            is_down = true;
+            start_x = e.pageX - swipe_container.offsetLeft;
+            scroll_left = swipe_container.scrollLeft;
+        });
+
+        swipe_container.addEventListener('mouseleave', () => {
+            is_down = false;
+        });
+
+        swipe_container.addEventListener('mouseup', () => {
+            is_down = false;
+        });
+
+        swipe_container.addEventListener('mousemove', (e) => {
+            if (!is_down) return;
+            e.preventDefault();
+            const x = e.pageX - swipe_container.offsetLeft;
+            const walk = (x - start_x) * 2; 
+            swipe_container.scrollLeft = scroll_left - walk;
+        });
+
+        async function connect_bluetooth() {
+            if (!navigator.bluetooth) {
+                alert("Web Bluetooth API is not available.");
+                return;
+            }
+
+            if (is_ble_paired && ble_device && ble_device.gatt.connected) {
+                ble_device.gatt.disconnect();
+                return; 
+            }
+
+            document.getElementById('ble_pill_text').innerText = "Connecting...";
+            document.getElementById('ble_card_text').innerText = "Connecting...";
+
+            try {
+                ble_device = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: [psoc_service_uuid] 
+                });
+                
+                ble_device.addEventListener('gattserverdisconnected', on_disconnected);
+
+                const server = await ble_device.gatt.connect();
+                const service = await server.getPrimaryService(psoc_service_uuid);
+                
+                const spo2_char = await service.getCharacteristic(spo2_char_uuid);
+                await spo2_char.startNotifications();
+                spo2_char.addEventListener('characteristicvaluechanged', (e) => handle_sensor_update(e, 'spo2'));
+
+                const bpm_char = await service.getCharacteristic(bpm_char_uuid);
+                await bpm_char.startNotifications();
+                bpm_char.addEventListener('characteristicvaluechanged', (e) => handle_sensor_update(e, 'bpm'));
+
+                const battery_char = await service.getCharacteristic(battery_char_uuid);
+                await battery_char.startNotifications();
+                battery_char.addEventListener('characteristicvaluechanged', (e) => handle_sensor_update(e, 'battery'));
+
+                const position_char = await service.getCharacteristic(position_char_uuid);
+                await position_char.startNotifications();
+                position_char.addEventListener('characteristicvaluechanged', (e) => handle_sensor_update(e, 'position'));
+
+                is_ble_paired = true;
+                update_ble_ui();
+
+            } catch (error) {
+                update_ble_ui();
+            }
+        }
+
+        function on_disconnected() {
+            is_ble_paired = false;
+            update_ble_ui();
+        }
+
+        function handle_sensor_update(event, type) {
+            const data_val = event.target.value.getUint8(0); 
+            const now = Date.now();
+
+            if (type === 'spo2') {
+                const ui_text = document.getElementById('ui_bloodoxygen');
+                ui_text.innerText = data_val;
+                current_spo2 = data_val;
+                
+                if (data_val < 90 && data_val > 0) {
+                    ui_text.classList.add('text-red-500');
+                    ui_text.classList.remove('text-white');
+                } else {
+                    ui_text.classList.add('text-white');
+                    ui_text.classList.remove('text-red-500');
+                }
+                
+                if (now - last_spo2_graph_update >= graph_update_interval_ms) {
+                    update_graph(spo2_history, data_val, 'spo2');
+                    last_spo2_graph_update = now;
+                }
+
+            } else if (type === 'bpm') {
+                document.getElementById('ui_heartbeat').innerText = data_val;
+                current_bpm = data_val;
+                
+                if (now - last_bpm_graph_update >= graph_update_interval_ms) {
+                    update_graph(bpm_history, data_val, 'bpm');
+                    last_bpm_graph_update = now;
+                }
+
+            } else if (type === 'battery') {
+                document.getElementById('ui_battery_pill').innerText = data_val + '%';
+                document.getElementById('ui_battery_card').innerText = data_val;
+
+           } else if (type === 'position') {
+                current_position = data_val;
+                const position_map = {
+                    0: 'Back',
+                    1: 'Front',
+                    2: 'Right',
+                    3: 'Left'
+                };
+                const position_text = position_map[data_val] || `Unknown`;
+                const pos_el = document.getElementById('ui_position_main');
+                const pos_card_el = document.getElementById('ui_position_card');
+                if (pos_el) pos_el.innerText = position_text;
+                if (pos_card_el) pos_card_el.innerText = position_text;
+                
+                if (last_known_position !== null && current_position !== last_known_position) {
+                    position_changes_count++;
+                    const changes_el = document.getElementById('ui_position_changes');
+                    if (changes_el) changes_el.innerText = position_changes_count;
+                    update_sleep_score();
+                }
+                last_known_position = current_position;
+
+                if (now - last_position_graph_update >= graph_update_interval_ms) {
+                    update_graph(position_history, data_val, 'position');
+                    last_position_graph_update = now;
+                }
+            }
+            
+            evaluate_health();
+            evaluate_apnea_events();
+        }
+
+        function update_ble_ui() {
+            const pill = document.getElementById('ble_pill');
+            const pill_text = document.getElementById('ble_pill_text');
+            
+            const card = document.getElementById('ble_card');
+            const card_text = document.getElementById('ble_card_text');
+            const card_title = document.getElementById('ble_card_title');
+
+            const pill_path = document.getElementById('ble_pill_icon').querySelector('path');
+            const card_path = document.getElementById('ble_card_icon').querySelector('path');
+
+            const paired_path = "M440-80v-304L256-200l-56-56 224-224-224-224 56-56 184 184v-304h40l228 228-172 172 172 172L480-80h-40Zm80-496 76-76-76-74v150Zm0 342 76-74-76-76v150ZM157.5-437.5Q140-455 140-480t17.5-42.5Q175-540 200-540t42.5 17.5Q260-505 260-480t-17.5 42.5Q225-420 200-420t-42.5-17.5Zm560 0Q700-455 700-480t17.5-42.5Q735-540 760-540t42.5 17.5Q820-505 820-480t-17.5 42.5Q785-420 760-420t-42.5-17.5Z";
+            const unpaired_path = "M792-56 624-224 480-80h-40v-304L256-200l-56-56 196-196L56-792l56-56 736 736-56 56ZM520-234l46-46-46-46v92Zm44-274-56-56 88-88-76-74v174l-80-80v-248h40l228 228-144 144Z";
+
+            if (is_ble_paired) {
+                pill_path.setAttribute('d', paired_path);
+                card_path.setAttribute('d', paired_path);
+
+                pill.className = "bg-[#bac6d3] border border-[#aab7c6] flex flex-1 h-12 items-center justify-center gap-2 rounded-full shadow-sm text-[#1d2635] cursor-pointer hover:bg-[#aab8c9] transition-colors duration-300";
+                document.getElementById('ble_pill_icon').setAttribute('class', "w-7 h-7 text-[#279595] fill-current");
+                document.getElementById('ble_card_icon').setAttribute('class', "w-8 h-8 text-[#279595] fill-current");
+                pill_text.innerText = "Connected";
+                
+                card.className = "expandable_card bg-[#bac6d3] border border-[#aab7c6] rounded-2xl p-6 shadow-sm flex flex-col justify-center cursor-pointer hover:bg-[#aab8c9] transition-colors duration-300";
+                card_title.className = "text-[#2a3a4c] font-semibold text-sm mb-2";
+                card_text.innerText = "Connected";
+                card_text.className = "text-[#2a3a4c] text-2xl font-bold leading-none tracking-tight flex items-baseline";
+
+            } else {
+                pill_path.setAttribute('d', unpaired_path);
+                card_path.setAttribute('d', unpaired_path);
+
+                pill.className = "bg-red-100 border border-red-300 flex flex-1 h-12 items-center justify-center gap-2 rounded-full shadow-sm text-red-700 cursor-pointer hover:bg-red-200 transition-colors duration-300";
+                document.getElementById('ble_pill_icon').setAttribute('class', "w-7 h-7 text-red-600 fill-current");
+                document.getElementById('ble_card_icon').setAttribute('class', "w-8 h-8 text-red-600 fill-current");
+                pill_text.innerText = "Disconnected";
+                
+                card.className = "expandable_card bg-red-100 border border-red-300 rounded-2xl p-6 shadow-sm flex flex-col justify-center cursor-pointer hover:bg-red-200 transition-colors duration-300";
+                card_title.className = "text-red-800 font-semibold text-sm mb-2";
+                card_text.innerText = "Disconnected";
+                card_text.className = "text-red-700 text-2xl font-bold leading-none tracking-tight flex items-baseline";
+            }
+        }
+
+        document.getElementById('ble_pill').addEventListener('click', connect_bluetooth);
+        document.getElementById('ble_card').addEventListener('click', connect_bluetooth);
+
+        const max_points = 15;
+        let spo2_history = [97, 98, 98, 99, 98, 97, 98, 99, 98, 98, 97, 98, 99, 98, 98]; 
+        let bpm_history  = [72, 73, 71, 72, 74, 75, 73, 72, 71, 72, 73, 72, 71, 72, 72];
+        let position_history = [0, 0, 0, 3, 3, 3, 1, 1, 2, 2, 0, 0, 0, 0, 0];
+        let time_labels = Array(max_points).fill(''); 
+        let current_graph_mode = 'spo2'; 
+
+        const ctx = document.getElementById('activity_chart').getContext('2d');
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(0, 212, 182, 0.4)');
+        gradient.addColorStop(1, 'rgba(0, 212, 182, 0.0)');
+
+        let activity_chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: time_labels,
+                datasets: [{
+                    data: spo2_history, 
+                    borderColor: '#00d4b6',
+                    backgroundColor: gradient,
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: 'start',
+                    pointBackgroundColor: '#ffffff',
+                    pointBorderColor: '#00d4b6',
+                    pointBorderWidth: 2,
+                    pointHoverRadius: 6,
+                    stepped: false,
+                    pointRadius: (context) => {
+                        const data = context.dataset.data;
+                        if (!data || data.length === 0 || current_graph_mode === 'position') return 0;
+                        const max_val = Math.max(...data);
+                        return data[context.dataIndex] === max_val ? 5 : 0;
+                    }
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                animation: { duration: 300 }, 
+                scales: {
+                    x: { 
+                        display: true, 
+                        grid: { color: 'rgba(255,255,255,0.05)', borderDash: [4, 4] },
+                        ticks: { display: false }
+                    },
+                    y: { 
+                        display: true, 
+                        grid: { color: 'rgba(255,255,255,0.05)', borderDash: [4, 4] },
+                        ticks: { 
+                            color: '#777', 
+                            font: { size: 9 },
+                            callback: function(value) {
+                                if (current_graph_mode === 'position') {
+                                    const labels = ['Back', 'Front', 'Right', 'Left'];
+                                    return labels[value] || '';
+                                }
+                                return value;
+                            }
+                        },
+                        min: 0, 
+                        suggestedMax: 100
+                    }
+                }
+            }
+        });
+
+        function update_graph(history_array, new_value, type) {
+            history_array.push(new_value);
+            history_array.shift(); 
+            
+            if (current_graph_mode === type) {
+                if (type === 'bpm') {
+                    activity_chart.options.scales.y.suggestedMax = Math.max(...bpm_history) + 5;
+                }
+                activity_chart.update();
+            }
+        }
+
+        const btn_spo2 = document.getElementById('btn_spo2');
+        const btn_bpm = document.getElementById('btn_bpm');
+        const btn_position = document.getElementById('btn_position');
+        
+        const active_class = "bg-[#2c2c2e] text-gray-200 border border-[#3a3a3c] px-5 py-2 rounded-full text-sm font-medium shadow-sm";
+        const inactive_class = "bg-transparent border border-[#3a3a3c] text-gray-400 px-5 py-2 rounded-full text-sm font-medium hover:bg-[#2c2c2e] transition";
+
+        function switch_graph_mode(mode) {
+            current_graph_mode = mode;
+            
+            btn_spo2.className = inactive_class;
+            btn_bpm.className = inactive_class;
+            btn_position.className = inactive_class;
+
+            if (mode === 'spo2') {
+                btn_spo2.className = active_class;
+                activity_chart.data.datasets[0].data = spo2_history;
+                activity_chart.data.datasets[0].stepped = false;
+                activity_chart.data.datasets[0].fill = 'start';
+                activity_chart.options.scales.y.min = 0; 
+                delete activity_chart.options.scales.y.max;
+                activity_chart.options.scales.y.suggestedMax = 100;
+                delete activity_chart.options.scales.y.ticks.stepSize;
+            } else if (mode === 'bpm') {
+                btn_bpm.className = active_class;
+                activity_chart.data.datasets[0].data = bpm_history;
+                activity_chart.data.datasets[0].stepped = false;
+                activity_chart.data.datasets[0].fill = 'start';
+                activity_chart.options.scales.y.min = 0;
+                delete activity_chart.options.scales.y.max;
+                activity_chart.options.scales.y.suggestedMax = Math.max(...bpm_history) + 5;
+                delete activity_chart.options.scales.y.ticks.stepSize;
+            } else if (mode === 'position') {
+                btn_position.className = active_class;
+                activity_chart.data.datasets[0].data = position_history;
+                activity_chart.data.datasets[0].stepped = true;
+                activity_chart.data.datasets[0].fill = false; 
+                activity_chart.options.scales.y.min = 0;
+                activity_chart.options.scales.y.max = 3;
+                delete activity_chart.options.scales.y.suggestedMax;
+                activity_chart.options.scales.y.ticks.stepSize = 1; 
+            }
+            activity_chart.update();
+        }
+
+        btn_spo2.addEventListener('click', () => switch_graph_mode('spo2'));
+        btn_bpm.addEventListener('click', () => switch_graph_mode('bpm'));
+        btn_position.addEventListener('click', () => switch_graph_mode('position'));
+        
+        update_sleep_score();
+        evaluate_health();
+        </script>         
+    </body>     
+</html>
